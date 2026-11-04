@@ -11,6 +11,7 @@ import type {
   SyncDefinition,
   SyncDefinitionRequest,
   SyncRun,
+  SyncStatus,
   Validation
 } from './types'
 
@@ -64,6 +65,15 @@ export function runsQuery(definitionId: string | undefined) {
   return queryOptions({
     queryKey: [KEY, 'runs', definitionId],
     queryFn: () => api<SyncRun[]>(`${BASE}/sync-definitions/${definitionId}/runs?limit=50`),
+    enabled: Boolean(definitionId)
+  })
+}
+
+// the server's own summary: last run, error, links, cursors, next times, pending conflicts
+export function statusQuery(definitionId: string | undefined) {
+  return queryOptions({
+    queryKey: [KEY, 'status', definitionId],
+    queryFn: () => api<SyncStatus>(`${BASE}/sync-definitions/${definitionId}/status`),
     enabled: Boolean(definitionId)
   })
 }

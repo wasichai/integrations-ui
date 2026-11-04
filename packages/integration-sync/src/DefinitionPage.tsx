@@ -5,10 +5,11 @@ import { useTranslation } from 'react-i18next'
 import { Link, useNavigate, useParams } from 'react-router'
 import { EmptyState, PageHeader, QueryState, describeError, useWasichaiLinks } from '@wasichai/core'
 import { Alert, Button, Card, CardBody, CardHeader, CardTitle, ConfirmDialog, Table, Td, Th } from '@wasichai/ui'
-import { conflictsQuery, definitionQuery, runsQuery, useDeleteDefinition, useRunDefinition, useSetDefinitionActive } from './api'
+import { definitionQuery, runsQuery, statusQuery, useDeleteDefinition, useRunDefinition, useSetDefinitionActive } from './api'
 import { DefinitionStatusBadge, RunStatusBadge, Time } from './badges'
 import { SideLabel } from './DefinitionsPage'
 import { useCanManageSync } from './permissions'
+import { SyncStatusCard } from './SyncStatusCard'
 import type { RunKind, SyncDefinition } from './types'
 
 export function DefinitionPage() {
@@ -25,7 +26,8 @@ function DefinitionDetail({ definition }: { definition: SyncDefinition }) {
   const setActive = useSetDefinitionActive()
   const run = useRunDefinition()
   const remove = useDeleteDefinition()
-  const openConflicts = useQuery(conflictsQuery('OPEN', definition.id))
+  // same query as the status card: one request
+  const status = useQuery(statusQuery(definition.id))
   const [notice, setNotice] = useState<{ tone: 'success' | 'danger'; text: string } | null>(null)
   const [deleting, setDeleting] = useState(false)
   const [deleteError, setDeleteError] = useState<string | null>(null)
@@ -53,7 +55,7 @@ function DefinitionDetail({ definition }: { definition: SyncDefinition }) {
     }
   }
 
-  const open = openConflicts.data?.length ?? 0
+  const open = status.data?.pendingConflicts ?? 0
 
   return (
     <>
@@ -124,6 +126,7 @@ function DefinitionDetail({ definition }: { definition: SyncDefinition }) {
             {notice.text}
           </Alert>
         ) : null}
+        <SyncStatusCard definitionId={definition.id} />
         <div className="grid gap-5 lg:grid-cols-2">
           <Card>
             <CardHeader>

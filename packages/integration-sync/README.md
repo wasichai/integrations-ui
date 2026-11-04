@@ -5,7 +5,9 @@ semantics in `docs/architecture/sync-semantics.md` and ADR-0009).
 
 Keep records the same between two connections: a wizard to define a sync (both sides, direction, field mapping with
 owner, conflict strategy and transforms, delete policy, schedule), validation against the live schemas of both sides,
-activation, manual runs, the run history and the conflicts a person settles.
+activation, manual runs, the run history, the status the server reports (last run and success, the failing error and
+whether it retries, links by state, cursors, next scheduled run and reconcile) and the conflicts a person settles, field
+by field (A, B or a typed value).
 
 ## Install
 
@@ -56,4 +58,5 @@ running and resolving are shown only to `admin` or `MANAGE_ORGANIZATION`.
 ## Backend
 
 Needs `wasichai-integrations-sync`: `/api/integrations/sync-definitions` (GET/POST, GET/PUT with If-Match/DELETE by id,
-`/validate`, `/activate`, `/deactivate`, `/run`, `/runs`) and `/api/integrations/conflicts` (GET, `/{id}/resolve`).
+`/validate`, `/activate`, `/deactivate`, `/run`, `/runs`, `/status`) and `/api/integrations/conflicts` (GET, `/{id}/resolve`
+with the per-field form `{choice: "CUSTOM", fields: {"<mappingKey>": "A" | "B"}, values?}`).

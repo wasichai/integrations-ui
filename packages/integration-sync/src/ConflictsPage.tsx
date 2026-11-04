@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { CircleCheck } from 'lucide-react'
-import { useState, type FormEvent } from 'react'
+import { useId, useState, type FormEvent } from 'react'
 import { useTranslation } from 'react-i18next'
 import { Link, useSearchParams } from 'react-router'
 import { EmptyState, PageHeader, QueryState, formError, useWasichaiLinks, type FieldViolation } from '@wasichai/core'
@@ -70,8 +70,8 @@ export function ConflictsPage() {
                           </Link>
                         </Td>
                         <Td>
-                          {conflict.kind === 'DELETED' ? (
-                            <span className="text-ink-muted">{t('conflicts.deleted')}</span>
+                          {conflict.kind !== 'FIELDS' ? (
+                            <span className="text-ink-muted">{t(conflict.kind === 'DELETED' ? 'conflicts.deleted' : 'conflicts.orphaned')}</span>
                           ) : (
                             <ul className="space-y-0.5 text-xs">
                               {conflict.fields.map((field) => (
@@ -132,21 +132,30 @@ export function ConflictsPage() {
 
 type Pick = 'A' | 'B' | 'CUSTOM'
 
-// per field: A's value, B's value or a typed one. all A or all B is that choice; a mix is CUSTOM with
-// values keyed by A's field names. a kept value goes back encoded ({t, v}), which the server reads as is
+// per field: A's value, B's value or a typed one. all A or all B is that choice; a mix is CUSTOM with each
+// picked side in fields (keyed by the mapping key) and each typed value in values (keyed by A's field name).
+// the server takes B's value back through the inverse transform, never the client
 export function resolutionOf(fields: ConflictField[], picks: Record<string, Pick>, typed: Record<string, string>): ResolveRequest {
   const choices = fields.map((field) => picks[field.key] ?? 'A')
   if (choices.every((choice) => choice === 'A')) return { choice: 'A' }
   if (choices.every((choice) => choice === 'B')) return { choice: 'B' }
+  const sides: Record<string, 'A' | 'B'> = {}
+  const values: Record<string, unknown> = {}
+  fields.forEach((field, index) => {
+    const choice = choices[index]
+    if (choice === 'CUSTOM') values[field.aField] = typed[field.key] ?? ''
+    else sides[field.key] = choice
+  })
   return {
     choice: 'CUSTOM',
-    values: Object.fromEntries(
-      fields.map((field) => {
-        const choice = picks[field.key] ?? 'A'
-        return [field.aField, choice === 'A' ? field.a : choice === 'B' ? field.b : (typed[field.key] ?? '')]
-      })
-    )
+    ...(Object.keys(sides).length > 0 ? { fields: sides } : {}),
+    ...(Object.keys(values).length > 0 ? { values } : {})
   }
+}
+
+// a field's 400: a refused pick (fields.<key>, e.g. no inverse transform) or a missing value (values.<aField>)
+export function violationOf(field: ConflictField, violations: FieldViolation[]): string | undefined {
+  return violations.find((candidate) => candidate.field === `fields.${field.key}` || candidate.field === `values.${field.aField}`)?.message
 }
 
 function ResolveDialog({ conflict, onClose, onResolved }: { conflict: Conflict; onClose: () => void; onResolved: () => void }) {
@@ -155,36 +164,40 @@ function ResolveDialog({ conflict, onClose, onResolved }: { conflict: Conflict; 
   const [picks, setPicks] = useState<Record<string, Pick>>({})
   const [typed, setTyped] = useState<Record<string, string>>({})
   const [error, setError] = useState<{ message: string; violations: FieldViolation[] } | null>(null)
+  const ids = useId()
+  // DELETED and ORPHANED_CREATE: nothing to choose, resolving forgets the pair
+  const unlinks = conflict.kind !== 'FIELDS'
 
   const submit = async (event: FormEvent) => {
     event.preventDefault()
     setError(null)
     try {
-      // a deleted record has nothing to choose: resolving forgets the pair
-      await resolve.mutateAsync({ conflictId: conflict.id, request: conflict.kind === 'DELETED' ? {} : resolutionOf(conflict.fields, picks, typed) })
+      await resolve.mutateAsync({ conflictId: conflict.id, request: unlinks ? {} : resolutionOf(conflict.fields, picks, typed) })
       onResolved()
     } catch (cause) {
       setError(formError(cause))
     }
   }
 
-  const violation = (field: ConflictField) => error?.violations.find((candidate) => candidate.field === `values.${field.aField}`)?.message
+  // a violation no field claims stays in the banner, never dropped
+  const unclaimed = error?.violations.filter((violation) => !conflict.fields.some((field) => violationOf(field, [violation]))) ?? []
 
   return (
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="max-w-2xl">
         <DialogTitle className="text-lg font-semibold">{t('conflicts.resolveTitle')}</DialogTitle>
         <DialogDescription className="mt-1 text-sm text-ink-muted">
-          {conflict.kind === 'DELETED' ? t('conflicts.deletedHint') : t('conflicts.resolveHint')}
+          {t(conflict.kind === 'DELETED' ? 'conflicts.deletedHint' : conflict.kind === 'ORPHANED_CREATE' ? 'conflicts.orphanedHint' : 'conflicts.resolveHint')}
         </DialogDescription>
         <form onSubmit={submit} className="mt-4 space-y-4" noValidate>
           {conflict.kind === 'FIELDS'
-            ? conflict.fields.map((field) => {
+            ? conflict.fields.map((field, index) => {
                 const pick = picks[field.key] ?? 'A'
                 const name = `pick-${field.key}`
-                const problem = violation(field)
+                const problem = error ? violationOf(field, error.violations) : undefined
+                const problemId = `${ids}-problem-${index}`
                 return (
-                  <fieldset key={field.key} className="space-y-2 rounded-md border border-border p-3">
+                  <fieldset key={field.key} className="space-y-2 rounded-md border border-border p-3" aria-describedby={problem ? problemId : undefined}>
                     <legend className="px-1 text-sm font-medium text-ink">
                       {field.aField} ↔ {field.bField}
                     </legend>
@@ -208,27 +221,32 @@ function ResolveDialog({ conflict, onClose, onResolved }: { conflict: Conflict; 
                       </label>
                     ))}
                     {pick === 'CUSTOM' ? (
-                      <div className="space-y-1">
-                        <Input
-                          aria-label={t('conflicts.customValue', { field: field.aField })}
-                          value={typed[field.key] ?? ''}
-                          onChange={(event) => setTyped((current) => ({ ...current, [field.key]: event.target.value }))}
-                          aria-invalid={problem ? true : undefined}
-                        />
-                        {problem ? <p className="text-xs text-danger">{problem}</p> : null}
-                      </div>
+                      <Input
+                        aria-label={t('conflicts.customValue', { field: field.aField })}
+                        value={typed[field.key] ?? ''}
+                        onChange={(event) => setTyped((current) => ({ ...current, [field.key]: event.target.value }))}
+                        aria-invalid={problem ? true : undefined}
+                        aria-describedby={problem ? problemId : undefined}
+                      />
+                    ) : null}
+                    {problem ? (
+                      <p id={problemId} className="text-xs text-danger">
+                        {problem}
+                      </p>
                     ) : null}
                   </fieldset>
                 )
               })
             : null}
-          {error ? <Alert tone="danger">{error.message}</Alert> : null}
+          {error ? (
+            <Alert tone="danger">{[error.message, ...unclaimed.map((violation) => `${violation.field}: ${violation.message}`)].join(' — ')}</Alert>
+          ) : null}
           <div className="flex justify-end gap-2">
             <Button type="button" variant="secondary" onClick={onClose}>
               {t('common.cancel')}
             </Button>
             <Button type="submit" disabled={resolve.isPending}>
-              {conflict.kind === 'DELETED' ? t('conflicts.unlink') : t('conflicts.resolve')}
+              {unlinks ? t('conflicts.unlink') : t('conflicts.resolve')}
             </Button>
           </div>
         </form>
