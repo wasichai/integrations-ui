@@ -20,7 +20,8 @@ are documented there; this page covers working in this repository.
 
 Node 26, Yarn 1. `packages/*` are the yarn workspaces. `@wasichai/core`, `@wasichai/ui` and `@wasichai/testing` are
 installed from GitHub Packages: export `NODE_AUTH_TOKEN` (a token with `read:packages`) before `yarn install`.
-`tooling/` holds `run-ordered.mjs` (builds packages in dependency order) and `check-release.mjs`.
+`tooling/` holds `run-ordered.mjs` (builds packages in dependency order), `check-release.mjs` and
+`publish-packages.mjs` (see [Releasing](releasing.md)).
 
 ## Commands
 
@@ -35,4 +36,5 @@ yarn build                       # every package, in dependency order
 ## A new module package
 
 Copy `packages/integrations` (package.json, vite.config.ts, tsconfig*.json, src/test/setup.ts, boundaries, i18n and
-module tests), rename it, add it to `EXPECTED_PUBLIC` in `tooling/check-release.mjs`.
+module tests), rename it, add it to `EXPECTED_PUBLIC` in `tooling/check-release.mjs` and its `package.json` to the
+`extra-files` of `release-please-config.json`.

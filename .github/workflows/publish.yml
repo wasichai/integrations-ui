@@ -1,0 +1,70 @@
+name: Publish
+
+on:
+  release:
+    types: [published]
+
+# one upload at a time: a second release waits instead of racing the first
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  # the guard runs before the upload: a failed guard blocks it, so a release never half-publishes
+  guards:
+    name: Release guard (npm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    env:
+      # organization secret: a token with read:packages. .npmrc reads it
+      NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+    steps:
+      - id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          cache: yarn
+      - run: yarn install --frozen-lockfile
+      - run: yarn build
+      - name: Release guard (npm)
+        env:
+          VERSION: ${{ steps.version.outputs.version }}
+        run: node tooling/check-release.mjs --pack --version "$VERSION"
+
+  npm:
+    name: npm packages
+    needs: guards
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    # job level, not only on the install step: setup-node writes an .npmrc that reads ${NODE_AUTH_TOKEN} and, with
+    # cache: yarn, runs yarn right away. yarn 1 aborts on an unset variable in .npmrc
+    env:
+      # installing @wasichai/core, ui and testing reads wasichai/wasichai-ui's packages
+      NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+          cache: yarn
+          registry-url: https://npm.pkg.github.com
+          # the scope must equal the organization: github packages refuses any other
+          scope: '@wasichai'
+      - run: yarn install --frozen-lockfile
+      - run: yarn build
+      - name: Publish every public @wasichai package
+        env:
+          # publishing to this repository's packages: the workflow's own token, packages: write
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          # the one the guard checked
+          VERSION: ${{ needs.guards.outputs.version }}
+        # skips versions already up, so re-running a failed upload finishes it
+        run: node tooling/publish-packages.mjs "$VERSION"
