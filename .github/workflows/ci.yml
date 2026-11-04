@@ -26,14 +26,11 @@ jobs:
     timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      # no yarn cache until yarn.lock is committed: setup-node refuses a cache without a lockfile
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
-      # not frozen: there is no lockfile yet. the next step prints the one this install wrote, to commit it
-      - run: yarn install
-      - name: Print yarn.lock
-        run: cat yarn.lock
+          cache: yarn
+      - run: yarn install --frozen-lockfile
       - run: yarn format:check
       - run: yarn test:tooling
       - run: yarn lint
@@ -50,7 +47,8 @@ jobs:
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
-      - run: yarn install
+          cache: yarn
+      - run: yarn install --frozen-lockfile
       - run: yarn build
       - run: node tooling/check-release.mjs --pack
 
