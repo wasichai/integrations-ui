@@ -2,12 +2,13 @@
 // guards a release before anything is uploaded: which npm packages would be published and what their
 // tarballs would hold. ci.yml runs it with --pack on every push and pull request.
 import { execFileSync } from 'node:child_process'
-import { readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // the public set, by name. a new package fails the check until someone adds it here on purpose.
-export const EXPECTED_PUBLIC = ['@wasichai/integrations', '@wasichai/integration-sync']
+// each package adds itself here when it lands
+export const EXPECTED_PUBLIC = []
 
 // installed from GitHub Packages, never built here: a package may only peer on them, at any version the app picked
 const PLATFORM = ['@wasichai/core', '@wasichai/ui', '@wasichai/testing']
@@ -21,6 +22,8 @@ function readPackage(dir) {
 }
 
 export function publicPackages(packagesRoot) {
+  // a workspace with no package yet publishes nothing
+  if (!existsSync(packagesRoot)) return []
   return readdirSync(packagesRoot, { withFileTypes: true })
     .filter((entry) => entry.isDirectory())
     .map((entry) => join(packagesRoot, entry.name))
