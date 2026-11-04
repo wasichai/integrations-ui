@@ -30,8 +30,8 @@ connections page (`/integrations/connections` with the default base path), which
 
 ```
 packages/   @wasichai/integrations, @wasichai/integration-sync
-tooling/    run-ordered (build in dependency order), check-release (what a release publishes)
-docs/       pointers to the backend docs
+tooling/    run-ordered (build in dependency order), check-release (what a release publishes), publish-packages
+docs/       pointers to the backend docs, releasing
 ```
 
 ## Commands

@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { WasichaiModule } from '@wasichai/core'
 import { mockFetch, renderWithProviders, type FetchMock, type MockRoute } from '@wasichai/testing'
-import { ConflictsPage, resolutionOf } from './ConflictsPage'
+import { ConflictsPage, resolutionOf, violationOf } from './ConflictsPage'
 import { integrationSyncModule } from './module'
 import type { Conflict, ConflictField } from './types'
 
@@ -39,13 +39,27 @@ const render = (routes: MockRoute[], options: { admin?: boolean } = {}) => {
 }
 
 describe('resolutionOf', () => {
-  it('sends a side when every field takes it, and custom values keyed by A otherwise', () => {
+  it('sends a side when every field takes it, otherwise picks in fields and typed values in values', () => {
     expect(resolutionOf(fields, {}, {})).toEqual({ choice: 'A' })
     expect(resolutionOf(fields, { 'email->mail': 'B', 'stage->status': 'B' }, {})).toEqual({ choice: 'B' })
+    expect(resolutionOf(fields, { 'email->mail': 'B' }, {})).toEqual({ choice: 'CUSTOM', fields: { 'email->mail': 'B', 'stage->status': 'A' } })
     expect(resolutionOf(fields, { 'email->mail': 'B', 'stage->status': 'CUSTOM' }, { 'stage->status': 'customer' })).toEqual({
       choice: 'CUSTOM',
-      values: { email: { t: 'text', v: 'ana@b.com' }, stage: 'customer' }
+      fields: { 'email->mail': 'B' },
+      values: { stage: 'customer' }
     })
+    expect(resolutionOf(fields, { 'email->mail': 'CUSTOM', 'stage->status': 'CUSTOM' }, { 'email->mail': 'ana@c.com' })).toEqual({
+      choice: 'CUSTOM',
+      values: { email: 'ana@c.com', stage: '' }
+    })
+  })
+})
+
+describe('violationOf', () => {
+  it('finds a refused pick by mapping key and a missing value by A field', () => {
+    expect(violationOf(fields[0], [{ field: 'fields.email->mail', message: 'no inverse' }])).toBe('no inverse')
+    expect(violationOf(fields[1], [{ field: 'values.stage', message: 'required' }])).toBe('required')
+    expect(violationOf(fields[1], [{ field: 'fields.email->mail', message: 'no inverse' }])).toBeUndefined()
   })
 })
 
@@ -70,8 +84,56 @@ describe('ConflictsPage', () => {
     expect(await screen.findByText('Conflict resolved')).toBeInTheDocument()
     expect(mock!.calls.find((call) => call.method === 'POST')?.body).toEqual({
       choice: 'CUSTOM',
-      values: { email: { t: 'text', v: 'ana@b.com' }, stage: 'customer' }
+      fields: { 'email->mail': 'B' },
+      values: { stage: 'customer' }
     })
+  })
+
+  it("shows the server's violations next to the field they name", async () => {
+    render([
+      { path: /^\/integrations\/conflicts\?status=OPEN/, body: [conflict] },
+      {
+        method: 'POST',
+        path: '/integrations/conflicts/k1/resolve',
+        status: 400,
+        body: {
+          title: 'Bad Request',
+          detail: 'Invalid resolution',
+          errors: [
+            { field: 'fields.email->mail', message: "this mapping's transform has no inverse; give values.email" },
+            { field: 'choice', message: 'A, B or CUSTOM' }
+          ]
+        }
+      }
+    ])
+    await userEvent.click(await screen.findByRole('button', { name: 'Resolve the conflict of Contactos' }))
+    const dialog = await screen.findByRole('dialog')
+    const email = within(dialog).getByRole('group', { name: 'email ↔ mail' })
+    await userEvent.click(within(email).getByLabelText("B's: ana@b.com"))
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Resolve' }))
+
+    expect(await within(email).findByText("this mapping's transform has no inverse; give values.email")).toBeInTheDocument()
+    expect(email).toHaveAccessibleDescription("this mapping's transform has no inverse; give values.email")
+    const stage = within(dialog).getByRole('group', { name: 'stage ↔ status' })
+    expect(within(stage).queryByText(/no inverse/)).not.toBeInTheDocument()
+    // the one no field claims stays in the banner
+    expect(within(dialog).getByRole('alert')).toHaveTextContent('Invalid resolution — choice: A, B or CUSTOM')
+    expect(within(dialog).getByRole('alert')).not.toHaveTextContent('no inverse')
+    expect(screen.queryByText('Conflict resolved')).not.toBeInTheDocument()
+  })
+
+  it('unlinks an interrupted create without a choice', async () => {
+    const orphan: Conflict = { ...conflict, kind: 'ORPHANED_CREATE', fields: [] }
+    render([
+      { path: /^\/integrations\/conflicts\?status=OPEN/, body: [orphan] },
+      { method: 'POST', path: '/integrations/conflicts/k1/resolve', body: { ...orphan, status: 'RESOLVED', resolution: { choice: 'UNLINK' } } }
+    ])
+    expect(await screen.findByText('A create was cut short')).toBeInTheDocument()
+    await userEvent.click(screen.getByRole('button', { name: 'Resolve the conflict of Contactos' }))
+    const dialog = await screen.findByRole('dialog')
+    await userEvent.click(within(dialog).getByRole('button', { name: 'Stop pairing' }))
+    expect(await screen.findByText('Conflict resolved')).toBeInTheDocument()
+    expect(mock!.calls.find((call) => call.method === 'POST')?.body).toEqual({})
   })
 
   it('posts a single side when every field keeps it', async () => {

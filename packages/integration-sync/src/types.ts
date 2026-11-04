@@ -102,10 +102,47 @@ export interface SyncRun {
   skipped: number
   conflicts: number
   failed: number
+  // reconciliation findings, and checkpoints the provider refused
+  missing?: number
+  diverged?: number
+  cursorResets?: number
   error: string | null
+  errorKind?: ErrorKind | null
   queuedAt: string
   startedAt: string | null
   finishedAt: string | null
+}
+
+// transient: the job retries by itself. permanent: a person must act
+export type ErrorKind = 'transient' | 'permanent'
+
+export type LinkState = 'LINKED' | 'PENDING_CREATE' | 'CONFLICT' | 'ORPHANED'
+
+export type Side = 'A' | 'B'
+
+export interface SyncCursor {
+  side: Side
+  checkpoint?: string | null
+  updatedAt: string
+}
+
+// GET /sync-definitions/{id}/status: one definition at a glance (SyncStatusView)
+export interface SyncStatus {
+  definitionId: string
+  status: DefinitionStatus
+  lastRun?: SyncRun | null
+  lastSuccessAt?: string | null
+  // from the latest finished run, only when it failed
+  lastError?: string | null
+  errorKind?: ErrorKind | null
+  pendingConflicts: number
+  // every state, zero included
+  links: Record<LinkState, number>
+  cursors: SyncCursor[]
+  // set for an ACTIVE definition with a schedule
+  nextScheduledAt?: string | null
+  nextReconcileAt?: string | null
+  queuedOrRunning: boolean
 }
 
 // a field value as the engine stores it: t is the kind, v the value (r the resource of a reference)
@@ -126,26 +163,30 @@ export interface ConflictField {
   base?: { a: EncodedValue; b: EncodedValue } | null
 }
 
-export type ConflictKind = 'FIELDS' | 'DELETED'
+// DELETED and ORPHANED_CREATE have no fields: resolving unlinks the pair
+export type ConflictKind = 'FIELDS' | 'DELETED' | 'ORPHANED_CREATE'
 
 export type ConflictStatus = 'OPEN' | 'RESOLVED'
 
 export interface Conflict {
   id: string
   definitionId: string
-  linkId: string
+  // null once the pair was unlinked
+  linkId: string | null
   kind: ConflictKind
   fields: ConflictField[]
   status: ConflictStatus
-  resolution: { choice: string; values?: Record<string, unknown> } | null
+  resolution: { choice: string; values?: Record<string, unknown>; fields?: Record<string, Side> } | null
   detectedAt: string
   resolvedAt: string | null
 }
 
-// A or B takes that side for every field; CUSTOM takes values keyed by A's field names
+// A or B takes that side for every field. CUSTOM settles each field by values (keyed by A's field name)
+// or else by fields (a side keyed by the mapping key). B's value goes back through the inverse transform
 export interface ResolveRequest {
   choice?: 'A' | 'B' | 'CUSTOM'
   values?: Record<string, unknown>
+  fields?: Record<string, Side>
 }
 
 // what this module reads of the integrations module: its connection list and discovery.

@@ -5,7 +5,7 @@ import type { WasichaiModule } from '@wasichai/core'
 import { mockFetch, renderWithProviders, type FetchMock, type MockRoute } from '@wasichai/testing'
 import { DefinitionPage } from './DefinitionPage'
 import { integrationSyncModule } from './module'
-import type { SyncDefinition, SyncRun } from './types'
+import type { SyncDefinition, SyncRun, SyncStatus } from './types'
 
 const integrationsGroup: WasichaiModule = { id: 'integrations', navGroups: [{ id: 'integrations', labelKey: 'integrations:nav.group', order: 45 }] }
 
@@ -40,18 +40,37 @@ const run: SyncRun = {
   updated: 3,
   skipped: 4,
   conflicts: 1,
-  failed: 0,
+  failed: 1,
   error: 'RateLimited: retry after 30s',
   queuedAt: '2026-11-04T10:00:00Z',
   startedAt: '2026-11-04T10:00:01Z',
   finishedAt: '2026-11-04T10:00:05Z'
 }
 
-const render = (routes: MockRoute[], options: { admin?: boolean } = {}) => {
+const status = (overrides: Partial<SyncStatus> = {}): SyncStatus => ({
+  definitionId: 'd1',
+  status: 'ACTIVE',
+  lastRun: run,
+  lastSuccessAt: '2026-11-03T10:00:00Z',
+  lastError: null,
+  errorKind: null,
+  pendingConflicts: 2,
+  links: { LINKED: 40, PENDING_CREATE: 1, CONFLICT: 2, ORPHANED: 0 },
+  cursors: [
+    { side: 'A', checkpoint: '2026-11-04T10:00:00Z', updatedAt: '2026-11-04T10:00:05Z' },
+    { side: 'B', checkpoint: null, updatedAt: '2026-11-04T10:00:05Z' }
+  ],
+  nextScheduledAt: '2099-01-01T00:00:00Z',
+  nextReconcileAt: null,
+  queuedOrRunning: false,
+  ...overrides
+})
+
+const render = (routes: MockRoute[], options: { admin?: boolean; status?: MockRoute } = {}) => {
   mock = mockFetch([
     ...routes,
     { path: '/integrations/sync-definitions/d1/runs', body: [run] },
-    { path: /^\/integrations\/conflicts\?status=OPEN/, body: [{ id: 'k1' }, { id: 'k2' }] },
+    options.status ?? { path: '/integrations/sync-definitions/d1/status', body: status() },
     { path: '/integrations/connections', body: [{ id: 'c1', connectorId: 'hubspot', name: 'HubSpot', status: 'ACTIVE' }] }
   ])
   return renderWithProviders(<DefinitionPage />, {
@@ -70,7 +89,7 @@ describe('DefinitionPage', () => {
       { method: 'POST', path: '/integrations/sync-definitions/d1/activate', body: definition({ status: 'ACTIVE' }) }
     ])
     expect(await screen.findByRole('heading', { name: 'Contactos', level: 1 })).toBeInTheDocument()
-    const row = (await screen.findByText('Partial')).closest('tr')!
+    const row = (await screen.findByRole('cell', { name: 'Partial' })).closest('tr')!
     expect(within(row).getByText('RateLimited: retry after 30s')).toBeInTheDocument()
     expect(within(row).getByText(/10 read, 2 created, 3 updated/)).toBeInTheDocument()
     expect(await screen.findByRole('link', { name: '2 open conflicts' })).toHaveAttribute('href', '/integrations/conflicts?definitionId=d1')
@@ -113,5 +132,68 @@ describe('DefinitionPage', () => {
     await screen.findByRole('heading', { name: 'Contactos', level: 1 })
     expect(screen.queryByRole('button', { name: 'Run now' })).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: 'Edit' })).not.toBeInTheDocument()
+  })
+
+  it('shows the status the server reports: runs, links, cursors and what comes next', async () => {
+    render([{ path: '/integrations/sync-definitions/d1', body: definition({ status: 'ACTIVE' }) }])
+    const card = within((await screen.findByRole('heading', { name: 'Status', level: 2 })).closest<HTMLElement>('[data-slot="card"]')!)
+    expect(await card.findByText('The last run finished, but 1 record failed')).toBeInTheDocument()
+    expect(card.getByText('Linked:').parentElement).toHaveTextContent('Linked: 40')
+    expect(card.getByText('In conflict:').parentElement).toHaveTextContent('In conflict: 2')
+    expect(card.getByText('A: 2026-11-04T10:00:00Z')).toBeInTheDocument()
+    expect(card.getByText('B: from the start')).toBeInTheDocument()
+    expect(card.getByText('Next run').nextElementSibling?.querySelector('time')).toHaveAttribute('datetime', '2099-01-01T00:00:00Z')
+    expect(card.queryByText('Queued or running')).not.toBeInTheDocument()
+    // the header counts what the server says: no conflict list read
+    expect(screen.getByRole('link', { name: '2 open conflicts' })).toBeInTheDocument()
+    expect(mock!.calls.some((call) => call.path.startsWith('/integrations/conflicts'))).toBe(false)
+  })
+
+  it('says why the sync is failing and that a run is on its way', async () => {
+    render([{ path: '/integrations/sync-definitions/d1', body: definition({ status: 'ACTIVE' }) }], {
+      status: {
+        path: '/integrations/sync-definitions/d1/status',
+        body: status({ lastRun: { ...run, status: 'FAILED' }, lastError: 'AuthExpired: token revoked', errorKind: 'permanent', queuedOrRunning: true })
+      }
+    })
+    const card = within((await screen.findByRole('heading', { name: 'Status', level: 2 })).closest<HTMLElement>('[data-slot="card"]')!)
+    const alert = await card.findByRole('alert')
+    expect(alert).toHaveTextContent('Failing, a person must act. AuthExpired: token revoked')
+    expect(card.getByText('Queued or running')).toBeInTheDocument()
+  })
+
+  it('says a sync that never ran has not run yet', async () => {
+    render([{ path: '/integrations/sync-definitions/d1', body: definition() }], {
+      status: {
+        path: '/integrations/sync-definitions/d1/status',
+        body: status({
+          status: 'DRAFT',
+          lastRun: null,
+          lastSuccessAt: null,
+          pendingConflicts: 0,
+          links: { LINKED: 0, PENDING_CREATE: 0, CONFLICT: 0, ORPHANED: 0 },
+          cursors: [],
+          nextScheduledAt: null
+        })
+      }
+    })
+    expect(await screen.findByRole('heading', { name: 'It has not run yet', level: 3 })).toBeInTheDocument()
+    expect(screen.queryByRole('link', { name: /open conflict/ })).not.toBeInTheDocument()
+  })
+
+  it('shows a status that failed to load without hiding the rest', async () => {
+    render([{ path: '/integrations/sync-definitions/d1', body: definition() }], {
+      status: { path: '/integrations/sync-definitions/d1/status', status: 500, body: { title: 'Internal Server Error', detail: 'boom' } }
+    })
+    const card = within((await screen.findByRole('heading', { name: 'Status', level: 2 })).closest<HTMLElement>('[data-slot="card"]')!)
+    expect(await card.findByRole('alert')).toHaveTextContent('boom')
+    expect(card.getByRole('button', { name: 'Retry' })).toBeInTheDocument()
+    expect(await screen.findByRole('cell', { name: 'Partial' })).toBeInTheDocument()
+  })
+
+  it('shows the status loading', async () => {
+    render([{ path: '/integrations/sync-definitions/d1', body: definition() }])
+    const card = within((await screen.findByRole('heading', { name: 'Status', level: 2 })).closest<HTMLElement>('[data-slot="card"]')!)
+    expect(card.getByRole('status')).toHaveAttribute('data-state', 'loading')
   })
 })

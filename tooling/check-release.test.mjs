@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { test } from 'node:test'
 
-import { checkReleaseConfig, entryPoints, packDryRun } from './check-release.mjs'
+import { checkReleaseConfig, checkReleasePlease, checkVersion, entryPoints, packDryRun } from './check-release.mjs'
 
 const EXPECTED = ['@wasichai/a', '@wasichai/b']
 
@@ -28,12 +28,23 @@ const lib = (name, extra = {}) => ({
   ...extra
 })
 
-function withFixture(change, check) {
+const bump = (dir) => ({ type: 'json', path: `packages/${dir}/package.json`, jsonpath: '$.version' })
+
+const releasePlease = () => ({
+  config: { packages: { '.': { 'release-type': 'node', 'extra-files': [bump('a'), bump('b')] } } },
+  manifest: { '.': '0.1.0' }
+})
+
+function withFixture(change, check, changeRelease = () => {}) {
   const root = mkdtempSync(join(tmpdir(), 'check-release-'))
   try {
     const packages = { a: lib('@wasichai/a'), b: lib('@wasichai/b'), smoke: { name: '@wasichai/smoke', version: '0.1.0', private: true } }
     change(packages)
     for (const [dir, manifest] of Object.entries(packages)) write(root, `packages/${dir}/package.json`, manifest)
+    const release = releasePlease()
+    changeRelease(release)
+    if (release.config) write(root, 'release-please-config.json', release.config)
+    if (release.manifest) write(root, '.release-please-manifest.json', release.manifest)
     check(root)
   } finally {
     rmSync(root, { recursive: true, force: true })
@@ -78,6 +89,50 @@ test('a tarball without its entry points or with sources is refused', () => {
     (root) => {
       const pack = (dir) => (dir.endsWith('a') ? ['package.json', 'dist/index.js', 'src/index.ts'] : ['package.json', 'dist/index.js', 'dist/index.d.ts'])
       assert.deepEqual(packDryRun(root, { pack }), ['@wasichai/a tarball lacks dist/index.d.ts', '@wasichai/a tarball ships src/'])
+    }
+  )
+})
+
+test('release-please bumps every public package on the version it is at', () => {
+  withFixture(
+    () => {},
+    (root) => assert.deepEqual(checkReleasePlease(root), [])
+  )
+})
+
+test('a public package release-please does not bump is reported', () => {
+  withFixture(
+    () => {},
+    (root) => assert.deepEqual(checkReleasePlease(root), ['@wasichai/b is not bumped by release-please: add packages/b/package.json to extra-files']),
+    (release) => (release.config.packages['.']['extra-files'] = [bump('a')])
+  )
+})
+
+test('a package off the release-please version is reported', () => {
+  withFixture(
+    (packages) => (packages.a.version = '0.2.0'),
+    (root) => assert.deepEqual(checkReleasePlease(root), ['@wasichai/a has version 0.2.0, release-please is at 0.1.0'])
+  )
+})
+
+test('no release-please manifest is reported', () => {
+  withFixture(
+    () => {},
+    (root) => assert.deepEqual(checkReleasePlease(root), ['release-please-config.json or .release-please-manifest.json is missing or not JSON']),
+    (release) => (release.manifest = null)
+  )
+})
+
+test('every public package must carry the version being released', () => {
+  withFixture(
+    (packages) => (packages.smoke.version = '9.9.9'),
+    (root) => {
+      assert.deepEqual(checkVersion(root, '0.1.0'), [])
+      assert.deepEqual(checkVersion(root, '0.2.0'), [
+        '@wasichai/a has version 0.1.0, the release is 0.2.0',
+        '@wasichai/b has version 0.1.0, the release is 0.2.0'
+      ])
+      assert.deepEqual(checkVersion(root, 'v0.2.0'), ["a release version is X.Y.Z, got 'v0.2.0'"])
     }
   )
 })

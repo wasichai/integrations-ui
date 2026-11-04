@@ -38,8 +38,10 @@ jobs:
       # every package, in dependency order
       - run: yarn build
 
+  # what publish.yml would upload, on every push and pull request: the public set, release-please bumping each
+  # package, and every tarball holding its entry points and no sources
   release-guard:
-    name: Release guard (npm)
+    name: Release dry run (npm)
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:

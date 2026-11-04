@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// guards a release before anything is uploaded: which npm packages would be published and what their
-// tarballs would hold. ci.yml runs it with --pack on every push and pull request.
+// guards a release before anything is uploaded: which npm packages would be published, that release-please
+// bumps each of them, and what their tarballs would hold. ci.yml runs it with --pack on every push and pull
+// request; publish.yml adds --version <tag version> before the upload.
 import { execFileSync } from 'node:child_process'
 import { existsSync, readdirSync, readFileSync } from 'node:fs'
-import { dirname, join, resolve } from 'node:path'
+import { basename, dirname, join, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 // the public set, by name. a new package fails the check until someone adds it here on purpose.
@@ -64,6 +65,42 @@ export function checkReleaseConfig(repoRoot, expected = EXPECTED_PUBLIC) {
   return problems
 }
 
+function readJson(path) {
+  try {
+    return JSON.parse(readFileSync(path, 'utf8'))
+  } catch {
+    return null
+  }
+}
+
+// one version line: release-please bumps the root and, through extra-files, every public package.
+// a package it does not bump would publish its old version again (E409) or drift from the tag
+export function checkReleasePlease(repoRoot) {
+  const config = readJson(join(repoRoot, 'release-please-config.json'))
+  const manifest = readJson(join(repoRoot, '.release-please-manifest.json'))
+  if (!config || !manifest) return ['release-please-config.json or .release-please-manifest.json is missing or not JSON']
+  const root = config.packages?.['.']
+  const version = manifest['.']
+  if (!root || !version) return ['release-please releases the root package "." on one version line: configure it there']
+
+  const problems = []
+  const bumped = (root['extra-files'] ?? []).filter((file) => file?.type === 'json' && file.jsonpath === '$.version').map((file) => file.path)
+  for (const { dir, pkg } of publicPackages(join(repoRoot, 'packages'))) {
+    const path = `packages/${basename(dir)}/package.json`
+    if (!bumped.includes(path)) problems.push(`${pkg.name} is not bumped by release-please: add ${path} to extra-files`)
+    if (pkg.version !== version) problems.push(`${pkg.name} has version ${pkg.version}, release-please is at ${version}`)
+  }
+  return problems
+}
+
+// what publish.yml uploads is package.json's version: it must be the tag's
+export function checkVersion(repoRoot, version) {
+  if (!/^\d+\.\d+\.\d+$/.test(version ?? '')) return [`a release version is X.Y.Z, got '${version}'`]
+  return publicPackages(join(repoRoot, 'packages'))
+    .filter(({ pkg }) => pkg.version !== version)
+    .map(({ pkg }) => `${pkg.name} has version ${pkg.version}, the release is ${version}`)
+}
+
 export function npmPack(dir) {
   const out = execFileSync('npm', ['pack', '--dry-run', '--json', '--ignore-scripts'], { cwd: dir, encoding: 'utf8' })
   return JSON.parse(out)[0].files.map((file) => file.path)
@@ -84,8 +121,10 @@ export function packDryRun(repoRoot, { pack = npmPack } = {}) {
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-  const problems = checkReleaseConfig(repoRoot)
-  if (process.argv.includes('--pack')) problems.push(...packDryRun(repoRoot))
+  const args = process.argv.slice(2)
+  const problems = [...checkReleaseConfig(repoRoot), ...checkReleasePlease(repoRoot)]
+  if (args.includes('--version')) problems.push(...checkVersion(repoRoot, args[args.indexOf('--version') + 1]))
+  if (args.includes('--pack')) problems.push(...packDryRun(repoRoot))
   for (const problem of problems) console.error(`check-release: ${problem}`)
   if (problems.length > 0) process.exit(1)
   console.log('check-release: ok')
