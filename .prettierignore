@@ -1,0 +1,18 @@
+# prettier owns code only. docs keep their hand formatting.
+*.md
+docs/
+.idea/
+.superpowers/
+**/dist/
+**/build/
+**/coverage/
+node_modules/
+yarn.lock
+CHANGELOG.md
+.release-please-manifest.json
+
+**/test-results/
+**/playwright-report/
+
+# local harness settings, not part of the repo
+.claude/

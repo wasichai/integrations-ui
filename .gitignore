@@ -1,0 +1,33 @@
+# Node
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+coverage/
+*.tgz
+
+# Playwright
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# IDE
+.idea/
+*.iml
+.vscode/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Env / secrets
+.env
+.env.local
+.local/
+
+# Logs
+*.log
+
+# Tooling scratch
+.superpowers/
+.claude/
