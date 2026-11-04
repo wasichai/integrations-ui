@@ -1,0 +1,72 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+# packages: read lets the token pull @wasichai/core, ui and testing from GitHub Packages
+permissions:
+  contents: read
+  packages: read
+
+env:
+  # organization secret: a token with read:packages. .npmrc reads it
+  NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+
+jobs:
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    # a hung yarn install or vite build must not burn the default 6 h
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # no yarn cache until yarn.lock is committed: setup-node refuses a cache without a lockfile
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+      # not frozen: there is no lockfile yet. the next step prints the one this install wrote, to commit it
+      - run: yarn install
+      - name: Print yarn.lock
+        run: cat yarn.lock
+      - run: yarn format:check
+      - run: yarn test:tooling
+      - run: yarn lint
+      - run: yarn test
+      # every package, in dependency order
+      - run: yarn build
+
+  release-guard:
+    name: Release guard (npm)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+      - run: yarn install
+      - run: yarn build
+      - run: node tooling/check-release.mjs --pack
+
+  commits:
+    name: Conventional commits
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: '26'
+      - name: commitlint
+        run: |
+          npm install --no-save --no-package-lock @commitlint/cli@21.2.4 @commitlint/config-conventional@21.2.4
+          npx commitlint --from ${{ github.event.pull_request.base.sha }} --to ${{ github.event.pull_request.head.sha }} --verbose
