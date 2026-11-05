@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url'
 
 // the public set, by name. a new package fails the check until someone adds it here on purpose.
 // each package adds itself here when it lands
-export const EXPECTED_PUBLIC = ['@wasichai/integrations', '@wasichai/integration-sync']
+export const EXPECTED_PUBLIC = ['@wasichai/integrations', '@wasichai/integration-sync', '@wasichai/integration-workflows']
 
 // installed from GitHub Packages, never built here: a package may only peer on them, at any version the app picked
 const PLATFORM = ['@wasichai/core', '@wasichai/ui', '@wasichai/testing']

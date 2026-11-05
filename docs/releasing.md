@@ -1,9 +1,10 @@
 # Releasing
 
-This repository releases the npm packages of Wasichai Integrations, `@wasichai/integrations` and
-`@wasichai/integration-sync`, on one version line of their own, to `https://npm.pkg.github.com`. The Maven modules
-are released from [wasichai/integrations](https://github.com/wasichai/integrations/blob/main/docs/development/releasing.md)
-the same way, on theirs.
+This repository releases the npm packages of Wasichai Integrations, `@wasichai/integrations`,
+`@wasichai/integration-sync` and `@wasichai/integration-workflows`, on one version line of their own, to
+`https://npm.pkg.github.com`. The Maven modules are released from
+[wasichai/integrations](https://github.com/wasichai/integrations/blob/main/docs/development/releasing.md) the same way,
+on theirs.
 
 ## Flow
 
@@ -16,7 +17,7 @@ the same way, on theirs.
    `node tooling/publish-packages.mjs X.Y.Z`, which publishes each public package and skips a version already up, so
    re-running a failed upload finishes it.
 
-One version, not one per package: both packages ship together, neither depends on the other, and one tag keeps the
+One version, not one per package: the packages ship together, none depends on another, and one tag keeps the
 release notes and the backend's `api.md` in step. That is why the root package `"."` with `extra-files` is used rather
 than release-please's `node-workspace` plugin.
 
