@@ -1,6 +1,6 @@
 {
     "name": "@wasichai/integration-workflows",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Wasichai integration workflows module: workflow designer, triggers, approvals and execution history",
     "type": "module",
     "files": [
