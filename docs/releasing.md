@@ -1,8 +1,8 @@
 # Releasing
 
 This repository releases the npm packages of Wasichai Integrations, `@wasichai/integrations`,
-`@wasichai/integration-sync` and `@wasichai/integration-workflows`, on one version line of their own, to
-`https://npm.pkg.github.com`. The Maven modules are released from
+`@wasichai/integration-sync`, `@wasichai/integration-workflows` and `@wasichai/integration-ai`, on one version line of
+their own, to `https://npm.pkg.github.com`. The Maven modules are released from
 [wasichai/integrations](https://github.com/wasichai/integrations/blob/main/docs/development/releasing.md) the same way,
 on theirs.
 

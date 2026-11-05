@@ -141,7 +141,7 @@ test('every public package must carry the version being released', () => {
 // this repository itself: every package in packages/ is expected, bumped by release-please and on its version
 test('the repository publishes exactly its module packages, all on one version line', () => {
   const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
-  assert.deepEqual(EXPECTED_PUBLIC, ['@wasichai/integrations', '@wasichai/integration-sync', '@wasichai/integration-workflows'])
+  assert.deepEqual(EXPECTED_PUBLIC, ['@wasichai/integrations', '@wasichai/integration-sync', '@wasichai/integration-workflows', '@wasichai/integration-ai'])
   assert.deepEqual(checkReleaseConfig(repoRoot), [])
   assert.deepEqual(checkReleasePlease(repoRoot), [])
 })
