@@ -10,7 +10,8 @@ are documented there; this page covers working in this repository.
   [Security model](https://github.com/wasichai/integrations/blob/main/docs/architecture/security-model.md) ·
   [Sync semantics](https://github.com/wasichai/integrations/blob/main/docs/architecture/sync-semantics.md) ·
   [Workflows guide](https://github.com/wasichai/integrations/blob/main/docs/guides/workflows.md) ·
-  [AI tools guide](https://github.com/wasichai/integrations/blob/main/docs/guides/ai-tools.md)
+  [AI tools guide](https://github.com/wasichai/integrations/blob/main/docs/guides/ai-tools.md) ·
+  [Operations guide](https://github.com/wasichai/integrations/blob/main/docs/guides/operations.md)
 - ADRs: [OAuth flows](https://github.com/wasichai/integrations/blob/main/docs/adr/0006-oauth-flows.md),
   [Event envelope and webhooks](https://github.com/wasichai/integrations/blob/main/docs/adr/0007-event-envelope-and-webhooks.md),
   [Sync semantics and conflicts](https://github.com/wasichai/integrations/blob/main/docs/adr/0009-sync-semantics-and-conflicts.md),
