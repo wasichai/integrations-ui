@@ -9,6 +9,7 @@
             "bump-minor-pre-major": true,
             "extra-files": [
                 { "type": "json", "path": "packages/integration-sync/package.json", "jsonpath": "$.version" },
+                { "type": "json", "path": "packages/integration-workflows/package.json", "jsonpath": "$.version" },
                 { "type": "json", "path": "packages/integrations/package.json", "jsonpath": "$.version" }
             ]
         }

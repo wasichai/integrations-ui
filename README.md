@@ -1,23 +1,25 @@
 # integrations-ui
 
 The React packages of [Wasichai Integrations](https://github.com/wasichai/integrations): Wasichai modules that let an
-app connect to external systems (catalog, connections, webhooks, health) and keep records in sync between them. They
-plug into an app built with [wasichai-ui](https://github.com/wasichai/wasichai-ui) and are published as `@wasichai/*`
-to GitHub Packages. The backend, every ADR and the API contract live in
+app connect to external systems (catalog, connections, webhooks, health), keep records in sync between them and run
+workflows across them. They plug into an app built with [wasichai-ui](https://github.com/wasichai/wasichai-ui) and are
+published as `@wasichai/*` to GitHub Packages. The backend, every ADR and the API contract live in
 [wasichai/integrations](https://github.com/wasichai/integrations).
 
 ```tsx
 import { WasichaiApp } from '@wasichai/core'
 import { integrationsModule } from '@wasichai/integrations'
 import { integrationSyncModule } from '@wasichai/integration-sync'
+import { integrationWorkflowsModule } from '@wasichai/integration-workflows'
 
-<WasichaiApp config={{ apiBaseUrl: '/api' }} modules={[integrationsModule(), integrationSyncModule()]} />
+<WasichaiApp config={{ apiBaseUrl: '/api' }} modules={[integrationsModule(), integrationSyncModule(), integrationWorkflowsModule()]} />
 ```
 
 | Package | What |
 |---|---|
 | `@wasichai/integrations` | connector catalog, provider apps, connections (OAuth and API key), resources, webhooks, events, health |
 | `@wasichai/integration-sync` | sync definitions (wizard, field mapping), runs and conflicts; needs `@wasichai/integrations` registered |
+| `@wasichai/integration-workflows` | workflow designer, versions, runs and approvals, webhook url; needs `@wasichai/integrations` registered |
 
 Install (`.npmrc`: `@wasichai:registry=https://npm.pkg.github.com` plus a token with `read:packages`):
 `yarn add @wasichai/integrations @wasichai/core @wasichai/ui`.
@@ -29,7 +31,7 @@ connections page (`/integrations/connections` with the default base path), which
 ## Layout
 
 ```
-packages/   @wasichai/integrations, @wasichai/integration-sync
+packages/   @wasichai/integrations, @wasichai/integration-sync, @wasichai/integration-workflows
 tooling/    run-ordered (build in dependency order), check-release (what a release publishes), publish-packages
 docs/       pointers to the backend docs, releasing
 ```

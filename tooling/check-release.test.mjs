@@ -3,10 +3,11 @@
 import assert from 'node:assert/strict'
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
-import { join } from 'node:path'
+import { dirname, join, resolve } from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { test } from 'node:test'
 
-import { checkReleaseConfig, checkReleasePlease, checkVersion, entryPoints, packDryRun } from './check-release.mjs'
+import { checkReleaseConfig, checkReleasePlease, checkVersion, entryPoints, EXPECTED_PUBLIC, packDryRun } from './check-release.mjs'
 
 const EXPECTED = ['@wasichai/a', '@wasichai/b']
 
@@ -135,4 +136,12 @@ test('every public package must carry the version being released', () => {
       assert.deepEqual(checkVersion(root, 'v0.2.0'), ["a release version is X.Y.Z, got 'v0.2.0'"])
     }
   )
+})
+
+// this repository itself: every package in packages/ is expected, bumped by release-please and on its version
+test('the repository publishes exactly its module packages, all on one version line', () => {
+  const repoRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..')
+  assert.deepEqual(EXPECTED_PUBLIC, ['@wasichai/integrations', '@wasichai/integration-sync', '@wasichai/integration-workflows'])
+  assert.deepEqual(checkReleaseConfig(repoRoot), [])
+  assert.deepEqual(checkReleasePlease(repoRoot), [])
 })
