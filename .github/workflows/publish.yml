@@ -21,13 +21,17 @@ jobs:
     timeout-minutes: 20
     outputs:
       version: ${{ steps.version.outputs.version }}
-    env:
-      # organization secret: a token with read:packages. .npmrc reads it
-      NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     steps:
       - id: version
         run: echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # los paquetes de GitHub Packages de wasichai piden un token read:packages: packages-token lo pide a Infisical por OIDC, sin secretos en el repo
+      # antes de setup-node, que con cache: yarn ya corre yarn
+      - uses: ./.github/actions/packages-token
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
@@ -44,13 +48,15 @@ jobs:
     needs: guards
     runs-on: ubuntu-latest
     timeout-minutes: 20
-    # job level, not only on the install step: setup-node writes an .npmrc that reads ${NODE_AUTH_TOKEN} and, with
-    # cache: yarn, runs yarn right away. yarn 1 aborts on an unset variable in .npmrc
-    env:
-      # installing @wasichai/core, ui and testing reads wasichai/wasichai-ui's packages
-      NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # los paquetes de GitHub Packages de wasichai piden un token read:packages: packages-token lo pide a Infisical por OIDC, sin secretos en el repo
+      # antes de setup-node, que con cache: yarn ya corre yarn
+      - uses: ./.github/actions/packages-token
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
