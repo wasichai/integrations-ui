@@ -1,6 +1,6 @@
 {
     "name": "@wasichai/integration-admin",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Wasichai integration admin module: installed connectors and their maturity, tenant usage, system health and retention",
     "type": "module",
     "files": [
