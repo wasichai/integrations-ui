@@ -14,18 +14,21 @@ permissions:
   contents: read
   packages: read
 
-env:
-  # organization secret: a token with read:packages. .npmrc reads it
-  NODE_AUTH_TOKEN: ${{ secrets.PACKAGES_TOKEN }}
-
 jobs:
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
     # a hung yarn install or vite build must not burn the default 6 h
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # los paquetes de GitHub Packages de wasichai piden un token read:packages: packages-token lo pide a Infisical por OIDC, sin secretos en el repo
+      # antes de setup-node, que con cache: yarn ya corre yarn
+      - uses: ./.github/actions/packages-token
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
@@ -44,8 +47,15 @@ jobs:
     name: Release dry run (npm)
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    permissions:
+      contents: read
+      packages: read
+      id-token: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # los paquetes de GitHub Packages de wasichai piden un token read:packages: packages-token lo pide a Infisical por OIDC, sin secretos en el repo
+      # antes de setup-node, que con cache: yarn ya corre yarn
+      - uses: ./.github/actions/packages-token
       - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '26'
