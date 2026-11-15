@@ -1,6 +1,6 @@
 {
     "name": "@wasichai/integration-sync",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Wasichai integration sync module: sync definitions, field mapping, runs and conflicts",
     "type": "module",
     "files": [

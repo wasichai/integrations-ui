@@ -1,6 +1,6 @@
 {
     "name": "@wasichai/integration-ai",
-    "version": "0.1.0",
+    "version": "0.2.0",
     "description": "Wasichai integration AI module: tool exposure, permissions, approvals, execution history and the MCP endpoint",
     "type": "module",
     "files": [
